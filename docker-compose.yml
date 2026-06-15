@@ -1,0 +1,15 @@
+services:
+  web:
+    build: .
+    container_name: springsteen-news
+    restart: unless-stopped
+    ports:
+      - "5010:5000"
+    env_file:
+      - .env
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.springsteen.rule=Host(`bruce.bentech.dev`)"
+      - "traefik.http.routers.springsteen.entrypoints=websecure"
+      - "traefik.http.routers.springsteen.tls.certresolver=letsencrypt"
+      - "traefik.http.services.springsteen.loadbalancer.server.port=5000"
