@@ -5,8 +5,10 @@ services:
     restart: unless-stopped
     ports:
       - "5010:5000"
-    env_file:
-      - .env
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.springsteen.rule=Host(`bruce.bentech.dev`)"
