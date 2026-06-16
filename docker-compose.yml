@@ -1,7 +1,6 @@
 services:
   web:
-    build: .
-    container_name: springsteen-news
+    image: ghcr.io/lewis159/springsteen-news:latest
     restart: unless-stopped
     environment:
       - SUPABASE_URL=${SUPABASE_URL}
