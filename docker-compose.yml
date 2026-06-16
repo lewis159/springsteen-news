@@ -3,8 +3,6 @@ services:
     build: .
     container_name: springsteen-news
     restart: unless-stopped
-    ports:
-      - "5010:5000"
     environment:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
