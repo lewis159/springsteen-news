@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block title %}{{ feed.name }} — Admin Overview{% endblock %}
+
+{% block nav_extra %}
+<style>
+  .admin-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  body.light .admin-nav { border-bottom-color: rgba(0,0,0,0.1); }
+  .admin-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+  }
+  .admin-breadcrumb a {
+    font-weight: 700;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .admin-breadcrumb a:hover { text-decoration: underline; }
+  .admin-breadcrumb .sep { opacity: 0.35; }
+  .admin-breadcrumb .current { font-weight: 600; opacity: 0.75; }
+  .admin-nav-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .tab-bar {
+    display: flex;
+    gap: 2px;
+    padding: 0 28px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  body.light .tab-bar { border-bottom-color: rgba(0,0,0,0.1); }
+  .tab-link {
+    padding: 12px 18px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: inherit;
+    text-decoration: none;
+    opacity: 0.55;
+    border-bottom: 2px solid transparent;
+    transition: opacity 0.15s, border-color 0.15s;
+  }
+  .tab-link:hover { opacity: 0.9; text-decoration: none; }
+  .tab-link.active { opacity: 1; border-bottom-color: var(--accent); color: var(--accent); }
+</style>
+<nav class="admin-nav">
+  <div class="admin-breadcrumb">
+    <a href="/">BenchFeed</a>
+    <span class="sep">/</span>
+    <span class="current">{{ feed.name }}</span>
+  </div>
+  <div class="admin-nav-right">
+    <a href="/" class="btn btn-accent btn-sm">View live site &rarr;</a>
+    <form method="POST" action="/auth/signout" style="margin:0;">
+      <button type="submit" class="btn btn-ghost btn-sm">Sign out</button>
+    </form>
+  </div>
+</nav>
+<div class="tab-bar">
+  <a href="/admin/" class="tab-link active">Overview</a>
+  <a href="/admin/sources" class="tab-link">Sources</a>
+  <a href="/admin/appearance" class="tab-link">Appearance</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .admin-main { max-width: 1100px; margin: 0 auto; padding: 36px 28px; }
+
+  .flash-error, .flash-success {
+    padding: 12px 18px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    font-size: 0.9rem;
+  }
+  .flash-error   { background: rgba(192,57,43,0.15); border: 1px solid rgba(192,57,43,0.4); color: #e74c3c; }
+  .flash-success { background: rgba(39,174,96,0.12); border: 1px solid rgba(39,174,96,0.35); color: #27ae60; }
+
+  /* stat cards */
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 36px;
+  }
+  @media (max-width: 600px) { .stat-row { grid-template-columns: 1fr; } }
+  .stat-card {
+    padding: 22px 24px;
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  body.light .stat-card { border-color: rgba(0,0,0,0.1); }
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--accent);
+  }
+  .stat-value {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .stat-label { font-size: 0.82rem; opacity: 0.55; text-transform: uppercase; letter-spacing: 0.07em; }
+
+  /* recent articles table */
+  .section-heading {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-heading::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255,255,255,0.08);
+  }
+  body.light .section-heading::after { background: rgba(0,0,0,0.1); }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+  .data-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.45;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-weight: 600;
+  }
+  body.light .data-table th { border-bottom-color: rgba(0,0,0,0.1); }
+  .data-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    vertical-align: middle;
+  }
+  body.light .data-table td { border-bottom-color: rgba(0,0,0,0.07); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: rgba(255,255,255,0.03); }
+  body.light .data-table tr:hover td { background: rgba(0,0,0,0.025); }
+  .data-table a { color: inherit; }
+  .data-table a:hover { color: var(--accent); text-decoration: none; }
+  .td-title {
+    max-width: 360px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cat-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: var(--accent);
+    color: #fff;
+  }
+  .td-date { white-space: nowrap; opacity: 0.5; font-size: 0.8rem; }
+</style>
+
+<main class="admin-main">
+  {% if error %}
+    <div class="flash-error">{{ error }}</div>
+  {% endif %}
+  {% if success %}
+    <div class="flash-success">{{ success }}</div>
+  {% endif %}
+
+  <!-- Stat cards -->
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-value">{{ total_articles }}</div>
+      <div class="stat-label">Total articles</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ sources | length }}</div>
+      <div class="stat-label">Sources</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="font-size:1.1rem;padding-top:6px;">Recently</div>
+      <div class="stat-label">Last scraped</div>
+    </div>
+  </div>
+
+  <!-- Recent articles table -->
+  <h2 class="section-heading">Recent Articles</h2>
+  {% if articles %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Source</th>
+        <th>Category</th>
+        <th>Date</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in articles[:10] %}
+      <tr>
+        <td class="td-title">
+          <a href="{{ a.url }}" target="_blank" rel="noopener" title="{{ a.title }}">{{ a.title }}</a>
+        </td>
+        <td>{{ a.source_name }}</td>
+        <td>
+          {% if a.category %}
+            <span class="cat-badge">{{ a.category }}</span>
+          {% else %}
+            <span style="opacity:0.35;">—</span>
+          {% endif %}
+        </td>
+        <td class="td-date">
+          {{ a.published_at.strftime('%d %b %Y') if a.published_at else '—' }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p style="opacity:0.45;font-size:0.9rem;padding:20px 0;">No articles yet. Add sources to start aggregating content.</p>
+  {% endif %}
+</main>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const theme = localStorage.getItem('theme') || 'dark';
+    document.body.classList.remove('dark', 'light', 'auto');
+    document.body.classList.add(theme);
+  });
+</script>
+{% endblock %}

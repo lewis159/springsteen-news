@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+
+{% block title %}BenchFeed — Your own news aggregator{% endblock %}
+
+{% block nav_extra %}
+<style>
+  .plat-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  body.light .plat-nav { border-bottom-color: rgba(0,0,0,0.1); }
+  .plat-logo {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--accent);
+    text-decoration: none;
+    letter-spacing: -0.02em;
+  }
+  .plat-logo span { color: inherit; opacity: 0.5; font-weight: 400; }
+  .plat-nav-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.88rem;
+  }
+  .user-email { opacity: 0.55; font-size: 0.82rem; }
+</style>
+<nav class="plat-nav">
+  <a class="plat-logo" href="/">Bench<span>Feed</span></a>
+  <div class="plat-nav-right">
+    {% if current_user %}
+      <span class="user-email">{{ current_user.email_addresses[0] if current_user.email_addresses else '' }}</span>
+      <form method="POST" action="/auth/signout" style="margin:0;">
+        <button type="submit" class="btn btn-ghost btn-sm">Sign out</button>
+      </form>
+    {% else %}
+      <a href="/auth/signin" class="btn btn-accent btn-sm">Sign in</a>
+    {% endif %}
+  </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<style>
+  .plat-main { max-width: 1100px; margin: 0 auto; padding: 48px 24px; }
+
+  /* ── Flash ── */
+  .flash-error, .flash-success {
+    padding: 12px 18px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    font-size: 0.9rem;
+  }
+  .flash-error { background: rgba(192,57,43,0.15); border: 1px solid rgba(192,57,43,0.4); color: #e74c3c; }
+  .flash-success { background: rgba(39,174,96,0.12); border: 1px solid rgba(39,174,96,0.35); color: #27ae60; }
+
+  /* ── Authenticated: feeds grid ── */
+  .feeds-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 28px;
+  }
+  .feeds-header h1 { font-size: 1.5rem; font-weight: 700; }
+  .feeds-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+  }
+  .feed-card {
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 22px;
+    transition: border-color 0.15s, transform 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  body.light .feed-card { border-color: rgba(0,0,0,0.1); }
+  .feed-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--card-accent, var(--accent));
+  }
+  .feed-card:hover { border-color: var(--card-accent, var(--accent)); transform: translateY(-2px); }
+  .feed-card-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--card-accent, var(--accent));
+    margin-bottom: 4px;
+  }
+  .feed-card-subdomain {
+    font-size: 0.78rem;
+    opacity: 0.5;
+    margin-bottom: 14px;
+    font-family: monospace;
+  }
+  .feed-card-stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+  .feed-stat { font-size: 0.82rem; }
+  .feed-stat strong { display: block; font-size: 1.1rem; font-weight: 700; }
+  .feed-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .badge-live {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: rgba(39,174,96,0.18);
+    color: #2ecc71;
+    border: 1px solid rgba(39,174,96,0.3);
+  }
+  .badge-setup {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: rgba(243,156,18,0.15);
+    color: #f39c12;
+    border: 1px solid rgba(243,156,18,0.3);
+  }
+
+  /* dashed "new feed" card */
+  .feed-card-new {
+    border: 2px dashed rgba(255,255,255,0.15);
+    border-radius: 12px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 160px;
+    gap: 10px;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.15s;
+    text-align: center;
+  }
+  body.light .feed-card-new { border-color: rgba(0,0,0,0.18); }
+  .feed-card-new:hover { border-color: var(--accent); text-decoration: none; }
+  .feed-card-new-icon { font-size: 2rem; opacity: 0.35; }
+  .feed-card-new p { font-size: 0.88rem; opacity: 0.55; }
+  .feed-card-new strong { font-size: 0.95rem; color: var(--accent); }
+
+  /* ── Landing (unauthenticated) ── */
+  .landing-hero {
+    text-align: center;
+    padding: 80px 20px 60px;
+    max-width: 680px;
+    margin: 0 auto;
+  }
+  .landing-hero h1 {
+    font-size: 2.8rem;
+    font-weight: 800;
+    line-height: 1.15;
+    margin-bottom: 20px;
+    letter-spacing: -0.03em;
+  }
+  .landing-hero h1 em {
+    font-style: normal;
+    color: var(--accent);
+  }
+  .landing-hero p {
+    font-size: 1.1rem;
+    line-height: 1.7;
+    opacity: 0.65;
+    margin-bottom: 32px;
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .landing-cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin-top: 80px;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  @media (max-width: 640px) {
+    .features-grid { grid-template-columns: 1fr; }
+    .landing-hero h1 { font-size: 2rem; }
+  }
+  .feature-card {
+    padding: 24px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    text-align: center;
+  }
+  body.light .feature-card { border-color: rgba(0,0,0,0.1); }
+  .feature-icon { font-size: 2rem; margin-bottom: 14px; }
+  .feature-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+  .feature-card p { font-size: 0.88rem; opacity: 0.6; line-height: 1.6; }
+</style>
+
+<main class="plat-main">
+  {% if error %}
+    <div class="flash-error">{{ error }}</div>
+  {% endif %}
+  {% if success %}
+    <div class="flash-success">{{ success }}</div>
+  {% endif %}
+
+  {% if current_user %}
+    <!-- ── Authenticated view ── -->
+    <div class="feeds-header">
+      <h1>Your feeds</h1>
+    </div>
+
+    <div class="feeds-grid">
+      {% for f in platform_feeds %}
+      <div class="feed-card" style="--card-accent: {{ f.accent_color if f.accent_color else 'var(--accent)' }};">
+        <div class="feed-card-name">{{ f.name }}</div>
+        <div class="feed-card-subdomain">{{ f.subdomain }}.benchfeed.com</div>
+        <div class="feed-card-stats">
+          <div class="feed-stat">
+            <strong>{{ f.article_count }}</strong>
+            Articles
+          </div>
+          <div class="feed-stat">
+            <strong>{{ f.source_count }}</strong>
+            Sources
+          </div>
+        </div>
+        <div class="feed-card-footer">
+          {% if f.is_live %}
+            <span class="badge-live">&#9679; Live</span>
+          {% else %}
+            <span class="badge-setup">&#9675; Setup</span>
+          {% endif %}
+          <a href="/admin/{{ f.subdomain }}" class="btn btn-accent btn-sm">Manage</a>
+        </div>
+      </div>
+      {% endfor %}
+
+      <!-- Request new feed card -->
+      <a href="mailto:hello@benchfeed.com?subject=New feed request" class="feed-card-new">
+        <span class="feed-card-new-icon">+</span>
+        <strong>Request new feed</strong>
+        <p>Get a custom news aggregator for your niche</p>
+      </a>
+    </div>
+
+  {% else %}
+    <!-- ── Landing page ── -->
+    <div class="landing-hero">
+      <h1>Your own news aggregator,<br><em>in minutes.</em></h1>
+      <p>BenchFeed gives you a fully branded, curated news reader for any topic or industry — with sidebar and magazine views, dark mode, smart filtering, and zero code required.</p>
+      <div class="landing-cta">
+        <a href="/auth/signin" class="btn btn-accent" style="font-size:1rem;padding:12px 28px;">Sign in to get started</a>
+      </div>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📰</div>
+        <h3>Curated feeds</h3>
+        <p>Aggregate RSS sources into a single beautifully designed reader, filtered by category and source.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎨</div>
+        <h3>Your brand</h3>
+        <p>Custom name, accent colour, logo and subdomain. Every feed looks like your own product.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Always fresh</h3>
+        <p>Sources are scraped automatically. Your readers always see the latest articles without lifting a finger.</p>
+      </div>
+    </div>
+  {% endif %}
+</main>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const theme = localStorage.getItem('theme') || 'dark';
+    document.body.classList.remove('dark', 'light', 'auto');
+    document.body.classList.add(theme);
+  });
+</script>
+{% endblock %}

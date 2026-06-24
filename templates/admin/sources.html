@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}{{ feed.name }} — Sources{% endblock %}
+
+{% block nav_extra %}
+<style>
+  .admin-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  body.light .admin-nav { border-bottom-color: rgba(0,0,0,0.1); }
+  .admin-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+  }
+  .admin-breadcrumb a { font-weight: 700; color: var(--accent); text-decoration: none; }
+  .admin-breadcrumb a:hover { text-decoration: underline; }
+  .admin-breadcrumb .sep { opacity: 0.35; }
+  .admin-breadcrumb .current { font-weight: 600; opacity: 0.75; }
+  .admin-nav-right { display: flex; align-items: center; gap: 10px; }
+  .tab-bar {
+    display: flex;
+    gap: 2px;
+    padding: 0 28px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  body.light .tab-bar { border-bottom-color: rgba(0,0,0,0.1); }
+  .tab-link {
+    padding: 12px 18px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: inherit;
+    text-decoration: none;
+    opacity: 0.55;
+    border-bottom: 2px solid transparent;
+    transition: opacity 0.15s, border-color 0.15s;
+  }
+  .tab-link:hover { opacity: 0.9; text-decoration: none; }
+  .tab-link.active { opacity: 1; border-bottom-color: var(--accent); color: var(--accent); }
+</style>
+<nav class="admin-nav">
+  <div class="admin-breadcrumb">
+    <a href="/">BenchFeed</a>
+    <span class="sep">/</span>
+    <span class="current">{{ feed.name }}</span>
+  </div>
+  <div class="admin-nav-right">
+    <a href="/" class="btn btn-accent btn-sm">View live site &rarr;</a>
+    <form method="POST" action="/auth/signout" style="margin:0;">
+      <button type="submit" class="btn btn-ghost btn-sm">Sign out</button>
+    </form>
+  </div>
+</nav>
+<div class="tab-bar">
+  <a href="/admin/" class="tab-link">Overview</a>
+  <a href="/admin/sources" class="tab-link active">Sources</a>
+  <a href="/admin/appearance" class="tab-link">Appearance</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .admin-main { max-width: 900px; margin: 0 auto; padding: 36px 28px; }
+
+  .flash-error, .flash-success {
+    padding: 12px 18px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    font-size: 0.9rem;
+  }
+  .flash-error   { background: rgba(192,57,43,0.15); border: 1px solid rgba(192,57,43,0.4); color: #e74c3c; }
+  .flash-success { background: rgba(39,174,96,0.12); border: 1px solid rgba(39,174,96,0.35); color: #27ae60; }
+
+  .section-heading {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-heading::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255,255,255,0.08);
+  }
+  body.light .section-heading::after { background: rgba(0,0,0,0.1); }
+
+  /* Sources list */
+  .sources-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 48px; }
+  .source-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    transition: border-color 0.15s;
+  }
+  body.light .source-row { border-color: rgba(0,0,0,0.1); }
+  .source-row:hover { border-color: rgba(255,255,255,0.18); }
+  body.light .source-row:hover { border-color: rgba(0,0,0,0.2); }
+
+  .toggle-form { flex-shrink: 0; }
+  .toggle-btn {
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 700;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+  }
+  .toggle-btn.active  { background: rgba(39,174,96,0.18); color: #2ecc71; border: 1px solid rgba(39,174,96,0.35); }
+  .toggle-btn.inactive { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); border: 1px solid rgba(255,255,255,0.12); }
+  body.light .toggle-btn.inactive { background: rgba(0,0,0,0.05); color: rgba(0,0,0,0.4); border-color: rgba(0,0,0,0.15); }
+  .toggle-btn:hover { opacity: 0.8; }
+
+  .source-info { flex: 1; min-width: 0; }
+  .source-name { font-size: 0.95rem; font-weight: 600; margin-bottom: 2px; }
+  .source-url {
+    font-size: 0.78rem;
+    opacity: 0.45;
+    font-family: monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  .article-count-badge {
+    flex-shrink: 0;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.07);
+    opacity: 0.7;
+    white-space: nowrap;
+  }
+  body.light .article-count-badge { background: rgba(0,0,0,0.07); }
+
+  .delete-form { flex-shrink: 0; }
+  .delete-btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(192,57,43,0.3);
+    background: transparent;
+    color: #e74c3c;
+    cursor: pointer;
+    font-size: 0.78rem;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .delete-btn:hover { background: rgba(192,57,43,0.15); border-color: #e74c3c; }
+
+  /* Empty state */
+  .empty-sources {
+    text-align: center;
+    padding: 40px 20px;
+    opacity: 0.4;
+    border: 1px dashed rgba(255,255,255,0.12);
+    border-radius: 10px;
+    margin-bottom: 48px;
+  }
+  body.light .empty-sources { border-color: rgba(0,0,0,0.15); }
+  .empty-sources p { margin-top: 8px; font-size: 0.9rem; }
+
+  /* Add source form */
+  .add-source-card {
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  body.light .add-source-card { border-color: rgba(0,0,0,0.1); }
+  .form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .form-field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 180px; }
+  .form-field label { font-size: 0.78rem; font-weight: 600; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.07em; }
+  .form-input {
+    padding: 9px 13px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 7px;
+    color: inherit;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  body.light .form-input { background: #fff; border-color: rgba(0,0,0,0.18); }
+  .form-input:focus { border-color: var(--accent); }
+  .form-input::placeholder { opacity: 0.4; }
+</style>
+
+<main class="admin-main">
+  {% if error %}
+    <div class="flash-error">{{ error }}</div>
+  {% endif %}
+  {% if success %}
+    <div class="flash-success">{{ success }}</div>
+  {% endif %}
+
+  <h2 class="section-heading">Sources <span style="opacity:0.4;font-size:0.8rem;font-weight:400;">{{ sources | length }} total</span></h2>
+
+  {% if sources %}
+  <div class="sources-list">
+    {% for source in sources %}
+    <div class="source-row">
+      <!-- Toggle active/inactive -->
+      <form class="toggle-form" method="POST" action="/admin/sources/toggle/{{ source.id }}">
+        <button type="submit" class="toggle-btn {{ 'active' if source.active else 'inactive' }}">
+          {% if source.active %}&#9679; Active{% else %}&#9675; Inactive{% endif %}
+        </button>
+      </form>
+
+      <!-- Info -->
+      <div class="source-info">
+        <div class="source-name">{{ source.name }}</div>
+        <div class="source-url" title="{{ source.feed_url }}">{{ source.feed_url }}</div>
+      </div>
+
+      <!-- Article count -->
+      <span class="article-count-badge">{{ source.article_count }} articles</span>
+
+      <!-- Delete -->
+      <form class="delete-form" method="POST" action="/admin/sources/delete/{{ source.id }}"
+            onsubmit="return confirm('Delete source &quot;{{ source.name }}&quot;? This cannot be undone.');">
+        <button type="submit" class="delete-btn" aria-label="Delete {{ source.name }}">&#128465;</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-sources">
+    <span style="font-size:2rem;">📡</span>
+    <p>No sources added yet. Add your first RSS feed below.</p>
+  </div>
+  {% endif %}
+
+  <!-- Add source form -->
+  <h2 class="section-heading">Add New Source</h2>
+  <div class="add-source-card">
+    <form method="POST" action="/admin/sources/add">
+      <div class="form-row">
+        <div class="form-field">
+          <label for="src-name">Source name</label>
+          <input class="form-input" type="text" id="src-name" name="name"
+                 placeholder="e.g. The Verge" required autocomplete="off">
+        </div>
+        <div class="form-field" style="flex: 2;">
+          <label for="src-url">Feed URL</label>
+          <input class="form-input" type="url" id="src-url" name="feed_url"
+                 placeholder="https://example.com/feed.xml" required autocomplete="off">
+        </div>
+        <div>
+          <button type="submit" class="btn btn-accent" style="height:40px;margin-top:auto;">Add Source</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</main>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const theme = localStorage.getItem('theme') || 'dark';
+    document.body.classList.remove('dark', 'light', 'auto');
+    document.body.classList.add(theme);
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,422 @@
+{% extends "base.html" %}
+
+{% block title %}{{ feed.name }} — Appearance{% endblock %}
+
+{% block nav_extra %}
+<style>
+  .admin-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  body.light .admin-nav { border-bottom-color: rgba(0,0,0,0.1); }
+  .admin-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+  }
+  .admin-breadcrumb a { font-weight: 700; color: var(--accent); text-decoration: none; }
+  .admin-breadcrumb a:hover { text-decoration: underline; }
+  .admin-breadcrumb .sep { opacity: 0.35; }
+  .admin-breadcrumb .current { font-weight: 600; opacity: 0.75; }
+  .admin-nav-right { display: flex; align-items: center; gap: 10px; }
+  .tab-bar {
+    display: flex;
+    gap: 2px;
+    padding: 0 28px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  body.light .tab-bar { border-bottom-color: rgba(0,0,0,0.1); }
+  .tab-link {
+    padding: 12px 18px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: inherit;
+    text-decoration: none;
+    opacity: 0.55;
+    border-bottom: 2px solid transparent;
+    transition: opacity 0.15s, border-color 0.15s;
+  }
+  .tab-link:hover { opacity: 0.9; text-decoration: none; }
+  .tab-link.active { opacity: 1; border-bottom-color: var(--accent); color: var(--accent); }
+</style>
+<nav class="admin-nav">
+  <div class="admin-breadcrumb">
+    <a href="/">BenchFeed</a>
+    <span class="sep">/</span>
+    <span class="current">{{ feed.name }}</span>
+  </div>
+  <div class="admin-nav-right">
+    <a href="/" class="btn btn-accent btn-sm">View live site &rarr;</a>
+    <form method="POST" action="/auth/signout" style="margin:0;">
+      <button type="submit" class="btn btn-ghost btn-sm">Sign out</button>
+    </form>
+  </div>
+</nav>
+<div class="tab-bar">
+  <a href="/admin/" class="tab-link">Overview</a>
+  <a href="/admin/sources" class="tab-link">Sources</a>
+  <a href="/admin/appearance" class="tab-link active">Appearance</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .admin-main { max-width: 860px; margin: 0 auto; padding: 36px 28px; }
+
+  .flash-error, .flash-success {
+    padding: 12px 18px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    font-size: 0.9rem;
+  }
+  .flash-error   { background: rgba(192,57,43,0.15); border: 1px solid rgba(192,57,43,0.4); color: #e74c3c; }
+  .flash-success { background: rgba(39,174,96,0.12); border: 1px solid rgba(39,174,96,0.35); color: #27ae60; }
+
+  .section-heading {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-heading::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255,255,255,0.08);
+  }
+  body.light .section-heading::after { background: rgba(0,0,0,0.1); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 340px; gap: 28px; align-items: start; }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* Form card */
+  .form-card {
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 12px;
+    padding: 28px;
+  }
+  body.light .form-card { border-color: rgba(0,0,0,0.1); }
+
+  .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-bottom: 22px;
+  }
+  .form-field:last-of-type { margin-bottom: 28px; }
+  .form-field label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    opacity: 0.55;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .form-input {
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    color: inherit;
+    font-size: 0.92rem;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  body.light .form-input { background: #fff; border-color: rgba(0,0,0,0.18); }
+  .form-input:focus { border-color: var(--accent); }
+  .form-input::placeholder { opacity: 0.35; }
+
+  /* Color picker row */
+  .color-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .color-picker-wrap {
+    position: relative;
+    width: 48px;
+    height: 40px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.15);
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  body.light .color-picker-wrap { border-color: rgba(0,0,0,0.2); }
+  .color-picker-wrap input[type=color] {
+    position: absolute;
+    inset: -4px;
+    width: calc(100% + 8px);
+    height: calc(100% + 8px);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    opacity: 1;
+  }
+  .color-hex-input {
+    flex: 1;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    color: inherit;
+    font-size: 0.92rem;
+    font-family: monospace;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  body.light .color-hex-input { background: #fff; border-color: rgba(0,0,0,0.18); }
+  .color-hex-input:focus { border-color: var(--accent); }
+
+  /* Preview card */
+  .preview-card {
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 12px;
+    overflow: hidden;
+    position: sticky;
+    top: 20px;
+  }
+  body.light .preview-card { border-color: rgba(0,0,0,0.1); }
+  .preview-header {
+    padding: 14px 18px;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    opacity: 0.4;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  body.light .preview-header { border-bottom-color: rgba(0,0,0,0.08); }
+  .preview-body { padding: 24px 20px; }
+
+  /* Mini nav mockup */
+  .preview-nav-mock {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+    margin-bottom: 16px;
+  }
+  body.light .preview-nav-mock { background: rgba(0,0,0,0.04); }
+  .preview-logo {
+    font-size: 1.1rem;
+    font-weight: 800;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .preview-logo img {
+    height: 28px;
+    width: auto;
+    object-fit: contain;
+    border-radius: 4px;
+    display: none;
+  }
+  .preview-logo img.visible { display: block; }
+  .preview-ticker-mock {
+    height: 24px;
+    border-radius: 5px;
+    margin-bottom: 14px;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 0.7rem;
+    color: #fff;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .preview-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .preview-card-item {
+    height: 10px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.06);
+  }
+  body.light .preview-card-item { background: rgba(0,0,0,0.07); }
+  .preview-card-item.accent-bar {
+    height: 10px;
+    width: 40%;
+    transition: background 0.2s;
+  }
+  .preview-card-item.wide { width: 90%; }
+  .preview-card-item.mid  { width: 70%; }
+  .preview-card-item.short { width: 50%; }
+  .preview-accent-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+</style>
+
+<main class="admin-main">
+  {% if error %}
+    <div class="flash-error">{{ error }}</div>
+  {% endif %}
+  {% if success %}
+    <div class="flash-success">{{ success }}</div>
+  {% endif %}
+
+  <h2 class="section-heading">Appearance</h2>
+
+  <div class="two-col">
+    <!-- Form -->
+    <div class="form-card">
+      <form method="POST" action="/admin/appearance">
+
+        <div class="form-field">
+          <label for="feed-name">Feed name</label>
+          <input class="form-input" type="text" id="feed-name" name="name"
+                 value="{{ feed.name }}" required
+                 placeholder="My News Feed"
+                 oninput="updatePreviewName(this.value)">
+        </div>
+
+        <div class="form-field">
+          <label>Accent colour</label>
+          <div class="color-row">
+            <div class="color-picker-wrap" title="Pick a colour">
+              <input type="color" id="accent-color-picker"
+                     name="accent_color"
+                     value="{{ feed.accent_color }}"
+                     oninput="updatePreviewColor(this.value); syncHexInput(this.value);">
+            </div>
+            <input class="color-hex-input" type="text" id="accent-hex"
+                   value="{{ feed.accent_color }}" maxlength="7"
+                   placeholder="#c0392b"
+                   oninput="syncColorPicker(this.value)">
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label for="logo-url">Logo URL <span style="font-weight:400;opacity:0.5;">(optional)</span></label>
+          <input class="form-input" type="url" id="logo-url" name="logo_url"
+                 value="{{ feed.logo_url or '' }}"
+                 placeholder="https://example.com/logo.png"
+                 oninput="updatePreviewLogo(this.value)">
+        </div>
+
+        <button type="submit" class="btn btn-accent" style="width:100%;justify-content:center;padding:11px;">
+          Save changes
+        </button>
+      </form>
+    </div>
+
+    <!-- Live preview -->
+    <div class="preview-card">
+      <div class="preview-header">Live preview</div>
+      <div class="preview-body">
+        <!-- Fake nav bar -->
+        <div class="preview-nav-mock">
+          <div class="preview-logo" id="preview-logo">
+            <img id="preview-logo-img" src="" alt="">
+            <span id="preview-logo-text">{{ feed.name }}</span>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <div style="width:50px;height:6px;border-radius:3px;background:rgba(255,255,255,0.08);"></div>
+            <div class="preview-accent-dot" id="preview-dot"></div>
+          </div>
+        </div>
+
+        <!-- Fake ticker -->
+        <div class="preview-ticker-mock" id="preview-ticker">
+          &#9679; Latest news from {{ feed.name }} &nbsp;&nbsp; &#9679; Breaking stories updated automatically
+        </div>
+
+        <!-- Fake article cards -->
+        <div class="preview-cards">
+          <div class="preview-card-item accent-bar" id="preview-bar"></div>
+          <div class="preview-card-item wide"></div>
+          <div class="preview-card-item mid"></div>
+          <div style="height:8px;"></div>
+          <div class="preview-card-item accent-bar" id="preview-bar2" style="width:30%;"></div>
+          <div class="preview-card-item wide"></div>
+          <div class="preview-card-item short"></div>
+        </div>
+
+        <!-- Colour swatch label -->
+        <div style="margin-top:20px;display:flex;align-items:center;gap:10px;font-size:0.78rem;opacity:0.5;">
+          <div class="preview-accent-dot" id="preview-swatch" style="width:14px;height:14px;"></div>
+          <span>Accent: <code id="preview-hex-label">{{ feed.accent_color }}</code></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  // Initialise preview with current values
+  const initColor = '{{ feed.accent_color }}';
+  applyColor(initColor);
+
+  function updatePreviewColor(hex) {
+    applyColor(hex);
+    document.getElementById('preview-hex-label').textContent = hex;
+  }
+
+  function applyColor(hex) {
+    document.getElementById('preview-ticker').style.background = hex;
+    document.getElementById('preview-dot').style.background = hex;
+    document.getElementById('preview-swatch').style.background = hex;
+    document.getElementById('preview-bar').style.background = hex;
+    document.getElementById('preview-bar2').style.background = hex;
+    document.getElementById('preview-logo').style.color = hex;
+  }
+
+  function syncHexInput(val) {
+    document.getElementById('accent-hex').value = val;
+  }
+
+  function syncColorPicker(val) {
+    if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+      document.getElementById('accent-color-picker').value = val;
+      updatePreviewColor(val);
+    }
+  }
+
+  function updatePreviewName(name) {
+    document.getElementById('preview-logo-text').textContent = name || 'Feed name';
+    document.getElementById('preview-ticker').textContent =
+      '● Latest news from ' + (name || 'your feed') + '  ● Breaking stories updated automatically';
+  }
+
+  function updatePreviewLogo(url) {
+    const img = document.getElementById('preview-logo-img');
+    const txt = document.getElementById('preview-logo-text');
+    if (url && url.startsWith('http')) {
+      img.src = url;
+      img.classList.add('visible');
+      txt.style.display = 'none';
+    } else {
+      img.classList.remove('visible');
+      txt.style.display = '';
+    }
+  }
+
+  // Restore theme
+  document.addEventListener('DOMContentLoaded', function () {
+    const theme = localStorage.getItem('theme') || 'dark';
+    document.body.classList.remove('dark', 'light', 'auto');
+    document.body.classList.add(theme);
+
+    // Init logo preview if set
+    const logoUrl = document.getElementById('logo-url').value;
+    if (logoUrl) updatePreviewLogo(logoUrl);
+  });
+</script>
+{% endblock %}
