@@ -1,0 +1,852 @@
+{% extends "base.html" %}
+
+{% block title %}{{ feed.name }}{% if selected_category %} — {{ selected_category }}{% endif %}{% endblock %}
+
+{% block content %}
+<style>
+  /* ── NAV ── */
+  .nav-wrapper {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(12px);
+  }
+  body.dark  .nav-wrapper { background: rgba(15,17,23,0.92); border-bottom: 1px solid rgba(255,255,255,0.07); }
+  body.light .nav-wrapper { background: rgba(245,245,245,0.92); border-bottom: 1px solid rgba(0,0,0,0.1); }
+
+  .nav-row1 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    gap: 16px;
+  }
+  .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .nav-logo img { height: 36px; width: auto; object-fit: contain; }
+
+  .search-form {
+    display: flex;
+    flex: 1;
+    max-width: 480px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  body.light .search-form { border-color: rgba(0,0,0,0.2); }
+  .search-form input {
+    flex: 1;
+    padding: 8px 14px;
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: 0.9rem;
+    outline: none;
+  }
+  .search-form button {
+    padding: 8px 14px;
+    background: var(--accent);
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+  }
+  .search-form button:hover { opacity: 0.85; }
+
+  .nav-admin-link {
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    padding: 5px 12px;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .nav-admin-link:hover { background: var(--accent); color: #fff; text-decoration: none; }
+
+  .nav-row2 {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 20px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    flex-wrap: wrap;
+  }
+  body.light .nav-row2 { border-top-color: rgba(0,0,0,0.07); }
+
+  .layout-pills { display: flex; gap: 4px; }
+  .pill-btn {
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  body.light .pill-btn { border-color: rgba(0,0,0,0.2); }
+  .pill-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .pill-btn:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+
+  .ctrl-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    opacity: 0.7;
+  }
+  .ctrl-group label { white-space: nowrap; }
+  .ctrl-group input[type=range] {
+    width: 90px;
+    accent-color: var(--accent);
+  }
+  .ctrl-group select {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 5px;
+    color: inherit;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  body.light .ctrl-group select { border-color: rgba(0,0,0,0.2); background: #fff; }
+  .nav-spacer { flex: 1; }
+
+  /* ── TICKER ── */
+  .ticker-bar {
+    background: var(--accent);
+    color: #fff;
+    overflow: hidden;
+    height: 32px;
+    display: flex;
+    align-items: center;
+  }
+  .ticker-label {
+    flex-shrink: 0;
+    padding: 0 14px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-right: 1px solid rgba(255,255,255,0.3);
+    height: 100%;
+    display: flex;
+    align-items: center;
+  }
+  .ticker-track-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+  .ticker-track {
+    display: flex;
+    gap: 0;
+    white-space: nowrap;
+    animation: ticker-scroll 40s linear infinite;
+  }
+  .ticker-track:hover { animation-play-state: paused; }
+  .ticker-item {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.82rem;
+    padding: 0 28px;
+  }
+  .ticker-item::after { content: "·"; margin-left: 28px; opacity: 0.5; }
+  .ticker-item a { color: #fff; text-decoration: none; }
+  .ticker-item a:hover { text-decoration: underline; }
+  @keyframes ticker-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  /* ── MAIN LAYOUT ── */
+  .page-main { max-width: 1280px; margin: 0 auto; padding: 24px 20px; }
+
+  /* ── SIDEBAR VIEW ── */
+  #sidebar-view { display: flex; gap: 24px; }
+
+  .sidebar-panel {
+    width: 220px;
+    flex-shrink: 0;
+  }
+  .sidebar-section { margin-bottom: 28px; }
+  .sidebar-section h3 {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    margin-bottom: 10px;
+    font-weight: 700;
+  }
+  .sidebar-link {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 8px;
+    border-radius: 5px;
+    font-size: 0.85rem;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.12s;
+    margin-bottom: 2px;
+  }
+  .sidebar-link:hover { background: rgba(255,255,255,0.07); text-decoration: none; }
+  body.light .sidebar-link:hover { background: rgba(0,0,0,0.06); }
+  .sidebar-link.active { background: rgba(255,255,255,0.1); color: var(--accent); font-weight: 600; }
+  body.light .sidebar-link.active { background: rgba(0,0,0,0.08); }
+  .sidebar-link .cnt {
+    font-size: 0.75rem;
+    opacity: 0.55;
+    background: rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 1px 7px;
+    min-width: 26px;
+    text-align: center;
+  }
+  body.light .sidebar-link .cnt { background: rgba(0,0,0,0.08); }
+  .sidebar-clear {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--accent);
+    opacity: 0.8;
+  }
+
+  .articles-panel { flex: 1; min-width: 0; }
+  .date-header {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.5;
+    margin: 24px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-weight: 600;
+  }
+  body.light .date-header { border-bottom-color: rgba(0,0,0,0.1); }
+  .date-header:first-child { margin-top: 0; }
+
+  .article-card {
+    display: flex;
+    gap: 14px;
+    padding: 14px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    transition: background 0.12s;
+    border: 1px solid transparent;
+  }
+  .article-card:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.07); }
+  body.light .article-card:hover { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); }
+  .article-card.no-thumb {
+    border-left: 3px solid var(--accent);
+    padding-left: 12px;
+  }
+  .article-thumb {
+    flex-shrink: 0;
+    width: 120px;
+    border-radius: 6px;
+    overflow: hidden;
+    align-self: flex-start;
+  }
+  .article-thumb img {
+    width: 100%;
+    max-height: var(--img-size, 90px);
+    object-fit: cover;
+    display: block;
+  }
+  .article-body { flex: 1; min-width: 0; }
+  .article-title {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.4;
+    margin-bottom: 5px;
+  }
+  .article-title a:hover { color: var(--accent); text-decoration: none; }
+  .article-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 0.76rem;
+    opacity: 0.6;
+    margin-bottom: 6px;
+  }
+  .badge {
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: var(--accent);
+    color: #fff;
+    opacity: 1;
+  }
+  .article-summary {
+    font-size: 0.87rem;
+    line-height: 1.55;
+    opacity: 0.75;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* ── MAGAZINE VIEW ── */
+  #magazine-view { display: none; }
+
+  .hero-section {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .hero-main {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    min-height: 340px;
+    background: #1a1a2e;
+  }
+  .hero-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    inset: 0;
+    max-height: none;
+  }
+  .hero-placeholder { width: 100%; height: 340px; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); display: flex; align-items: center; justify-content: center; }
+  .hero-placeholder-icon { font-size: 3rem; opacity: 0.2; }
+  .hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 55%);
+  }
+  .hero-content {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 24px;
+    color: #fff;
+  }
+  .hero-content .badge { margin-bottom: 8px; display: inline-block; }
+  .hero-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 8px;
+  }
+  .hero-title a { color: #fff; }
+  .hero-title a:hover { color: var(--accent); text-decoration: none; }
+  .hero-meta { font-size: 0.8rem; opacity: 0.75; }
+
+  .hero-sidebar { display: flex; flex-direction: column; gap: 12px; }
+  .hero-side-card {
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+    flex: 1;
+  }
+  body.light .hero-side-card { border-color: rgba(0,0,0,0.1); }
+  .hero-side-card:hover { border-color: var(--accent); }
+  .hero-side-thumb {
+    width: 70px;
+    flex-shrink: 0;
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .hero-side-thumb img {
+    width: 100%;
+    height: 58px;
+    object-fit: cover;
+  }
+  .hero-side-body { flex: 1; min-width: 0; }
+  .hero-side-title { font-size: 0.88rem; font-weight: 600; line-height: 1.35; margin-bottom: 4px; }
+  .hero-side-title a:hover { color: var(--accent); text-decoration: none; }
+  .hero-side-meta { font-size: 0.74rem; opacity: 0.55; }
+
+  .grid-section { margin-bottom: 28px; }
+  .grid-section h2 {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    font-weight: 700;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--accent);
+  }
+  .article-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .grid-card {
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  body.light .grid-card { border-color: rgba(0,0,0,0.1); }
+  .grid-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .grid-card-img {
+    width: 100%;
+    max-height: var(--img-size, 160px);
+    object-fit: cover;
+    display: block;
+  }
+  .grid-card-placeholder {
+    width: 100%;
+    height: 140px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    opacity: 0.15;
+  }
+  .grid-card-body { padding: 12px; }
+  .grid-card-title { font-size: 0.92rem; font-weight: 600; line-height: 1.4; margin-bottom: 6px; }
+  .grid-card-title a:hover { color: var(--accent); text-decoration: none; }
+  .grid-card-meta { font-size: 0.74rem; opacity: 0.55; margin-bottom: 6px; }
+  .grid-card-summary {
+    font-size: 0.82rem;
+    opacity: 0.7;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.5;
+  }
+
+  .more-articles { }
+  .more-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  body.light .more-row { border-bottom-color: rgba(0,0,0,0.08); }
+  .more-row:last-child { border-bottom: none; }
+  .more-row-num { font-size: 1.2rem; font-weight: 800; color: var(--accent); opacity: 0.4; width: 30px; flex-shrink: 0; line-height: 1; }
+  .more-row-title { font-size: 0.9rem; font-weight: 600; line-height: 1.4; }
+  .more-row-title a:hover { color: var(--accent); text-decoration: none; }
+  .more-row-meta { font-size: 0.74rem; opacity: 0.5; margin-top: 3px; }
+
+  /* ── PAGINATION ── */
+  .pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    margin-top: 32px;
+    flex-wrap: wrap;
+  }
+  .page-info { font-size: 0.8rem; opacity: 0.55; margin-right: 8px; }
+  .page-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 34px;
+    padding: 0 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.12);
+    font-size: 0.85rem;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  body.light .page-link { border-color: rgba(0,0,0,0.15); }
+  .page-link:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+  .page-link.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .page-link.disabled { opacity: 0.3; pointer-events: none; }
+</style>
+
+{% block nav_extra %}
+<div class="nav-wrapper">
+  <!-- Row 1: Logo + Search + Admin -->
+  <div class="nav-row1">
+    <a class="nav-logo" href="/">
+      {% if feed.logo_url %}
+        <img src="{{ feed.logo_url }}" alt="{{ feed.name }}">
+      {% else %}
+        {{ feed.name }}
+      {% endif %}
+    </a>
+
+    <form class="search-form" method="GET" action="/">
+      {% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}
+      {% if selected_source %}<input type="hidden" name="source" value="{{ selected_source }}">{% endif %}
+      <input type="text" name="q" value="{{ search or '' }}" placeholder="Search articles…" aria-label="Search">
+      <button type="submit" aria-label="Search">&#8594;</button>
+    </form>
+
+    {% if current_user %}
+      <a class="nav-admin-link" href="/admin">Admin</a>
+    {% endif %}
+  </div>
+
+  <!-- Row 2: Controls -->
+  <div class="nav-row2">
+    <div class="layout-pills">
+      <button class="pill-btn active" id="btn-sidebar" onclick="setLayout('sidebar')">&#9776; Sidebar</button>
+      <button class="pill-btn" id="btn-magazine" onclick="setLayout('magazine')">&#9783; Magazine</button>
+    </div>
+
+    <div class="ctrl-group">
+      <label for="img-slider">&#128247; Image</label>
+      <input type="range" id="img-slider" min="60" max="320" value="180" oninput="setImgSize(this.value)">
+    </div>
+
+    <div class="ctrl-group">
+      <label for="text-slider">&#65332; Text</label>
+      <input type="range" id="text-slider" min="80" max="130" value="100" oninput="setTextScale(this.value)">
+    </div>
+
+    <div class="ctrl-group">
+      <label for="theme-select">&#9788;</label>
+      <select id="theme-select" onchange="setTheme(this.value)">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="auto">Auto</option>
+      </select>
+    </div>
+
+    <div class="nav-spacer"></div>
+
+    <span style="font-size:0.78rem;opacity:0.45;">{{ total_articles }} articles</span>
+  </div>
+</div>
+{% endblock %}
+
+<!-- Ticker -->
+<div class="ticker-bar">
+  <span class="ticker-label">Latest</span>
+  <div class="ticker-track-wrap">
+    <div class="ticker-track" id="ticker-track">
+      {% for a in articles[:20] %}
+      <span class="ticker-item"><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a></span>
+      {% endfor %}
+      <!-- duplicate for seamless loop -->
+      {% for a in articles[:20] %}
+      <span class="ticker-item"><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a></span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<main class="page-main">
+
+  <!-- ════════════════════════════════
+       SIDEBAR VIEW
+  ════════════════════════════════ -->
+  <div id="sidebar-view">
+
+    <!-- Left sidebar -->
+    <aside class="sidebar-panel">
+      {% if selected_category or selected_source or search %}
+        <a class="sidebar-clear" href="/">&#10005; Clear filters</a>
+      {% endif %}
+
+      {% if categories %}
+      <div class="sidebar-section">
+        <h3>Categories</h3>
+        <a class="sidebar-link {% if not selected_category and not search %}active{% endif %}" href="/">
+          All <span class="cnt">{{ total_articles }}</span>
+        </a>
+        {% for cat in categories %}
+        <a class="sidebar-link {% if selected_category == cat.category %}active{% endif %}"
+           href="/?category={{ cat.category | urlencode }}">
+          {{ cat.category }}
+          <span class="cnt">{{ cat.cnt }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if source_counts %}
+      <div class="sidebar-section">
+        <h3>Sources</h3>
+        {% for s in source_counts %}
+        <a class="sidebar-link {% if selected_source == s.source_name %}active{% endif %}"
+           href="/?source={{ s.source_name | urlencode }}">
+          {{ s.source_name }}
+          <span class="cnt">{{ s.cnt }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </aside>
+
+    <!-- Articles panel -->
+    <section class="articles-panel">
+      {% if articles %}
+        {% set ns = namespace(last_date='') %}
+        {% for article in articles %}
+          {% set article_date = article.published_at.strftime('%A, %d %B %Y') if article.published_at else 'Unknown date' %}
+          {% if article_date != ns.last_date %}
+            <div class="date-header">{{ article_date }}</div>
+            {% set ns.last_date = article_date %}
+          {% endif %}
+
+          <article class="article-card {% if not article.thumbnail_url %}no-thumb{% endif %}">
+            {% if article.thumbnail_url %}
+            <div class="article-thumb">
+              <img src="{{ article.thumbnail_url }}" alt="" loading="lazy">
+            </div>
+            {% endif %}
+            <div class="article-body">
+              <div class="article-meta">
+                {% if article.category %}<span class="badge">{{ article.category }}</span>{% endif %}
+                <span>{{ article.source_name }}</span>
+                <span>{{ article.published_at.strftime('%H:%M') if article.published_at else '' }}</span>
+              </div>
+              <div class="article-title">
+                <a href="{{ article.url }}" target="_blank" rel="noopener">{{ article.title }}</a>
+              </div>
+              {% if article.summary %}
+              <p class="article-summary">{{ article.summary }}</p>
+              {% endif %}
+            </div>
+          </article>
+        {% endfor %}
+      {% else %}
+        <div style="text-align:center;padding:60px 20px;opacity:0.4;">
+          <p style="font-size:2rem;">📭</p>
+          <p style="margin-top:12px;">No articles found.</p>
+          {% if search or selected_category or selected_source %}
+          <a href="/" style="color:var(--accent);font-size:0.88rem;margin-top:8px;display:inline-block;">Clear filters</a>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <!-- Pagination -->
+      {% if pages and pages > 1 %}
+      <nav class="pagination" aria-label="Pagination">
+        <span class="page-info">Page {{ page }} of {{ pages }}</span>
+        {% if page > 1 %}
+          <a class="page-link" href="?{% if search %}q={{ search }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if selected_source %}source={{ selected_source }}&{% endif %}page={{ page - 1 }}">&laquo;</a>
+        {% else %}
+          <span class="page-link disabled">&laquo;</span>
+        {% endif %}
+        {% for p in range(1, pages + 1) %}
+          {% if p == page %}
+            <span class="page-link active">{{ p }}</span>
+          {% elif p <= 3 or p >= pages - 2 or (p >= page - 2 and p <= page + 2) %}
+            <a class="page-link" href="?{% if search %}q={{ search }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if selected_source %}source={{ selected_source }}&{% endif %}page={{ p }}">{{ p }}</a>
+          {% elif p == 4 or p == pages - 3 %}
+            <span class="page-link disabled">…</span>
+          {% endif %}
+        {% endfor %}
+        {% if page < pages %}
+          <a class="page-link" href="?{% if search %}q={{ search }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if selected_source %}source={{ selected_source }}&{% endif %}page={{ page + 1 }}">&raquo;</a>
+        {% else %}
+          <span class="page-link disabled">&raquo;</span>
+        {% endif %}
+      </nav>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- ════════════════════════════════
+       MAGAZINE VIEW
+  ════════════════════════════════ -->
+  <div id="magazine-view">
+    {% if articles %}
+
+      <!-- Hero -->
+      {% set hero = articles[0] %}
+      <div class="hero-section">
+        <div class="hero-main">
+          {% if hero.thumbnail_url %}
+            <img class="hero-img" src="{{ hero.thumbnail_url }}" alt="">
+            <div class="hero-overlay"></div>
+          {% else %}
+            <div class="hero-placeholder">
+              <span class="hero-placeholder-icon">📰</span>
+            </div>
+          {% endif %}
+          <div class="hero-content">
+            {% if hero.category %}<span class="badge">{{ hero.category }}</span>{% endif %}
+            <div class="hero-title">
+              <a href="{{ hero.url }}" target="_blank" rel="noopener">{{ hero.title }}</a>
+            </div>
+            <div class="hero-meta">{{ hero.source_name }} · {{ hero.published_at.strftime('%d %b %Y') if hero.published_at else '' }}</div>
+          </div>
+        </div>
+
+        <!-- Hero sidebar: next 3 articles -->
+        <div class="hero-sidebar">
+          {% for a in articles[1:4] %}
+          <div class="hero-side-card">
+            {% if a.thumbnail_url %}
+            <div class="hero-side-thumb">
+              <img src="{{ a.thumbnail_url }}" alt="" loading="lazy">
+            </div>
+            {% endif %}
+            <div class="hero-side-body">
+              <div class="hero-side-title"><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a></div>
+              <div class="hero-side-meta">{{ a.source_name }} · {{ a.published_at.strftime('%d %b') if a.published_at else '' }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- 3-col grid -->
+      {% if articles[4:10] %}
+      <section class="grid-section">
+        <h2>More Stories</h2>
+        <div class="article-grid">
+          {% for a in articles[4:10] %}
+          <article class="grid-card">
+            {% if a.thumbnail_url %}
+              <img class="grid-card-img" src="{{ a.thumbnail_url }}" alt="" loading="lazy">
+            {% else %}
+              <div class="grid-card-placeholder">📄</div>
+            {% endif %}
+            <div class="grid-card-body">
+              {% if a.category %}<span class="badge" style="margin-bottom:6px;display:inline-block;">{{ a.category }}</span>{% endif %}
+              <div class="grid-card-title"><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a></div>
+              <div class="grid-card-meta">{{ a.source_name }} · {{ a.published_at.strftime('%d %b %Y') if a.published_at else '' }}</div>
+              {% if a.summary %}<p class="grid-card-summary">{{ a.summary }}</p>{% endif %}
+            </div>
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      <!-- More articles list -->
+      {% if articles[10:] %}
+      <section class="grid-section">
+        <h2>Also Worth Reading</h2>
+        <div class="more-articles">
+          {% for a in articles[10:] %}
+          <div class="more-row">
+            <span class="more-row-num">{{ loop.index }}</span>
+            <div>
+              <div class="more-row-title"><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a></div>
+              <div class="more-row-meta">{{ a.source_name }}{% if a.category %} · {{ a.category }}{% endif %} · {{ a.published_at.strftime('%d %b %Y') if a.published_at else '' }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+    {% else %}
+      <div style="text-align:center;padding:80px 20px;opacity:0.4;">
+        <p style="font-size:2.5rem;">📭</p>
+        <p style="margin-top:14px;">No articles yet.</p>
+      </div>
+    {% endif %}
+
+    <!-- Magazine pagination -->
+    {% if pages and pages > 1 %}
+    <nav class="pagination" aria-label="Pagination">
+      <span class="page-info">Page {{ page }} of {{ pages }}</span>
+      {% if page > 1 %}
+        <a class="page-link" href="?{% if search %}q={{ search }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if selected_source %}source={{ selected_source }}&{% endif %}page={{ page - 1 }}">&laquo;</a>
+      {% else %}
+        <span class="page-link disabled">&laquo;</span>
+      {% endif %}
+      {% for p in range(1, pages + 1) %}
+        {% if p == page %}
+          <span class="page-link active">{{ p }}</span>
+        {% elif p <= 3 or p >= pages - 2 or (p >= page - 2 and p <= page + 2) %}
+          <a class="page-link" href="?{% if search %}q={{ search }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if selected_source %}source={{ selected_source }}&{% endif %}page={{ p }}">{{ p }}</a>
+        {% elif p == 4 or p == pages - 3 %}
+          <span class="page-link disabled">…</span>
+        {% endif %}
+      {% endfor %}
+      {% if page < pages %}
+        <a class="page-link" href="?{% if search %}q={{ search }}&{% endif %}{% if selected_category %}category={{ selected_category }}&{% endif %}{% if selected_source %}source={{ selected_source }}&{% endif %}page={{ page + 1 }}">&raquo;</a>
+      {% else %}
+        <span class="page-link disabled">&raquo;</span>
+      {% endif %}
+    </nav>
+    {% endif %}
+  </div>
+
+</main>
+
+<script>
+  // ── Layout ──
+  function setLayout(mode) {
+    const sv = document.getElementById('sidebar-view');
+    const mv = document.getElementById('magazine-view');
+    const bs = document.getElementById('btn-sidebar');
+    const bm = document.getElementById('btn-magazine');
+    if (mode === 'sidebar') {
+      sv.style.display = 'flex';
+      mv.style.display = 'none';
+      bs.classList.add('active');
+      bm.classList.remove('active');
+    } else {
+      sv.style.display = 'none';
+      mv.style.display = 'block';
+      bs.classList.remove('active');
+      bm.classList.add('active');
+    }
+    localStorage.setItem('layout', mode);
+  }
+
+  // ── Theme ──
+  function setTheme(theme) {
+    document.body.classList.remove('dark', 'light', 'auto');
+    document.body.classList.add(theme);
+    localStorage.setItem('theme', theme);
+    const sel = document.getElementById('theme-select');
+    if (sel) sel.value = theme;
+  }
+
+  // ── Image size ──
+  function setImgSize(val) {
+    document.documentElement.style.setProperty('--img-size', val + 'px');
+    localStorage.setItem('imgSize', val);
+    const sl = document.getElementById('img-slider');
+    if (sl) sl.value = val;
+  }
+
+  // ── Text scale ──
+  function setTextScale(val) {
+    document.documentElement.style.setProperty('--text-scale', val / 100);
+    localStorage.setItem('textScale', val);
+    const sl = document.getElementById('text-slider');
+    if (sl) sl.value = val;
+  }
+
+  // ── Restore from localStorage ──
+  document.addEventListener('DOMContentLoaded', function () {
+    const layout   = localStorage.getItem('layout')    || 'sidebar';
+    const theme    = localStorage.getItem('theme')     || 'dark';
+    const imgSize  = localStorage.getItem('imgSize')   || '180';
+    const textScale = localStorage.getItem('textScale') || '100';
+
+    setLayout(layout);
+    setTheme(theme);
+    setImgSize(imgSize);
+    setTextScale(textScale);
+  });
+</script>
+{% endblock %}

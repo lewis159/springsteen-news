@@ -1,13 +1,38 @@
 services:
   web:
-    image: ghcr.io/lewis159/springsteen-news:latest
+    image: ghcr.io/lewis159/aggregator-platform:latest
     restart: unless-stopped
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
+      DATABASE_URL: ${DATABASE_URL}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
+      CLERK_DOMAIN: ${CLERK_DOMAIN}
+      CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY}
+      PLATFORM_DOMAIN: ${PLATFORM_DOMAIN}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.springsteen.rule=Host(`bruce.bentech.dev`)"
-      - "traefik.http.routers.springsteen.entrypoints=websecure"
-      - "traefik.http.routers.springsteen.tls.certresolver=letsencrypt"
-      - "traefik.http.services.springsteen.loadbalancer.server.port=5000"
+
+      # Primary route: platform home domain
+      - "traefik.http.routers.aggregator.rule=Host(`bentech.dev`)"
+      - "traefik.http.routers.aggregator.entrypoints=websecure"
+      - "traefik.http.routers.aggregator.tls=true"
+      - "traefik.http.routers.aggregator.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.aggregator.service=aggregator-svc"
+      - "traefik.http.routers.aggregator.priority=10"
+
+      # Wildcard subdomain route (lower priority than specific routes)
+      - "traefik.http.routers.aggregator-sub.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.bentech.dev`)"
+      - "traefik.http.routers.aggregator-sub.entrypoints=websecure"
+      - "traefik.http.routers.aggregator-sub.tls=true"
+      - "traefik.http.routers.aggregator-sub.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.aggregator-sub.service=aggregator-svc"
+      - "traefik.http.routers.aggregator-sub.priority=1"
+
+      # Shared backend service on internal port 5000
+      - "traefik.http.services.aggregator-svc.loadbalancer.server.port=5000"
+
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
