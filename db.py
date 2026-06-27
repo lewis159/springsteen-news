@@ -1,15 +1,43 @@
 import os
-from supabase import create_client, Client
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from psycopg2 import pool
 
-_client: Client | None = None
+_pool = None
 
+def get_pool():
+    global _pool
+    if _pool is None:
+        _pool = psycopg2.pool.ThreadedConnectionPool(1, 10, os.environ['DATABASE_URL'])
+    return _pool
 
-def get_client() -> Client:
-    global _client
-    if _client is not None:
-        return _client
+def query(sql, params=None):
+    p = get_pool()
+    conn = p.getconn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(sql, params)
+            conn.commit()
+            try:
+                return [dict(r) for r in cur.fetchall()]
+            except Exception:
+                return []
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        p.putconn(conn)
 
-    url = os.environ["SUPABASE_URL"]
-    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-    _client = create_client(url, key)
-    return _client
+def execute(sql, params=None):
+    p = get_pool()
+    conn = p.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            conn.commit()
+            return cur.rowcount
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        p.putconn(conn)

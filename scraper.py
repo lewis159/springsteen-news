@@ -10,7 +10,7 @@ import feedparser
 import requests
 from bs4 import BeautifulSoup
 
-from db import get_client
+import db
 
 logger = logging.getLogger(__name__)
 
@@ -112,23 +112,12 @@ def _scrape_source(source: dict, feed_id: str):
             else:
                 published_at = datetime.datetime.utcnow().isoformat() + 'Z'
 
-            article = {
-                'feed_id': feed_id,
-                'source_id': source['id'],
-                'source_name': source['name'],
-                'title': title,
-                'url': url,
-                'summary': summary,
-                'thumbnail_url': thumbnail_url,
-                'category': category,
-                'published_at': published_at,
-            }
-
-            get_client().table('agg_articles').upsert(
-                article,
-                on_conflict='url',
-                ignore_duplicates=True,
-            ).execute()
+            db.execute(
+                """INSERT INTO agg_articles (feed_id, source_id, source_name, title, url, summary, thumbnail_url, category, published_at)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   ON CONFLICT (url) DO NOTHING""",
+                (feed_id, source['id'], source['name'], title, url, summary, thumbnail_url, category, published_at)
+            )
 
             count += 1
         except Exception as exc:
@@ -139,36 +128,20 @@ def _scrape_source(source: dict, feed_id: str):
 
 
 def run_scraper(feed_id: str = None):
-    client = get_client()
-
     if feed_id:
-        sources_resp = (
-            client.table('agg_sources')
-            .select('*')
-            .eq('feed_id', feed_id)
-            .eq('active', True)
-            .execute()
+        sources = db.query(
+            "SELECT * FROM agg_sources WHERE feed_id = %s AND active = TRUE",
+            (feed_id,)
         )
-        sources = sources_resp.data or []
         for source in sources:
             _scrape_source(source, feed_id)
     else:
-        feeds_resp = (
-            client.table('agg_feeds')
-            .select('*')
-            .eq('active', True)
-            .execute()
-        )
-        feeds = feeds_resp.data or []
+        feeds = db.query("SELECT * FROM agg_feeds WHERE active = TRUE")
         for feed in feeds:
             fid = feed['id']
-            sources_resp = (
-                client.table('agg_sources')
-                .select('*')
-                .eq('feed_id', fid)
-                .eq('active', True)
-                .execute()
+            sources = db.query(
+                "SELECT * FROM agg_sources WHERE feed_id = %s AND active = TRUE",
+                (fid,)
             )
-            sources = sources_resp.data or []
             for source in sources:
                 _scrape_source(source, fid)

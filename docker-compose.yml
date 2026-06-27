@@ -3,8 +3,7 @@ services:
     image: ghcr.io/lewis159/aggregator-platform:latest
     restart: unless-stopped
     environment:
-      SUPABASE_URL: ${SUPABASE_URL}
-      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      DATABASE_URL: ${DATABASE_URL}
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
       CLERK_DOMAIN: ${CLERK_DOMAIN}
       CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY}
