@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
-from db import get_client
+import db
 from scraper import run_scraper
 
 load_dotenv()
@@ -14,8 +14,10 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev')
 def parse_dt(val):
     if not val:
         return None
+    if hasattr(val, 'isoformat'):
+        return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
     try:
-        return datetime.fromisoformat(val.replace('Z', '+00:00'))
+        return datetime.fromisoformat(str(val).replace('Z', '+00:00'))
     except Exception:
         return None
 
@@ -28,43 +30,46 @@ def index():
     per_page = 20
     offset   = (page - 1) * per_page
 
-    sb = get_client()
-    schema = sb
-
-    # Build article query
-    q = schema.from_('bsn_articles').select('*', count='exact')
+    # Build WHERE clauses
+    where = []
+    params = []
     if search:
-        q = q.or_(f'title.ilike.%{search}%,summary.ilike.%{search}%')
+        where.append("(title ILIKE %s OR summary ILIKE %s)")
+        params += [f'%{search}%', f'%{search}%']
     if category:
-        q = q.eq('category', category)
+        where.append("category = %s")
+        params.append(category)
     if source:
-        q = q.eq('source_name', source)
+        where.append("source_name = %s")
+        params.append(source)
 
-    q = q.order('published_at', desc=True).range(offset, offset + per_page - 1)
-    result = q.execute()
-    articles = result.data or []
-    total    = result.count or 0
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+
+    count_row = db.query(f"SELECT COUNT(*) as cnt FROM bsn_articles {where_sql}", params or None)
+    total = count_row[0]['cnt'] if count_row else 0
+
+    articles = db.query(
+        f"SELECT * FROM bsn_articles {where_sql} ORDER BY published_at DESC LIMIT %s OFFSET %s",
+        (params + [per_page, offset]) if params else [per_page, offset]
+    )
 
     for a in articles:
         a['published_at'] = parse_dt(a.get('published_at'))
 
-    # Sidebar: sources with counts
-    src_result = schema.from_('bsn_articles').select('source_name').not_.is_('source_name', 'null').execute()
-    src_counts = {}
-    for row in (src_result.data or []):
-        n = row['source_name']
-        src_counts[n] = src_counts.get(n, 0) + 1
-    sources = sorted([{'source_name': k, 'cnt': v} for k, v in src_counts.items()], key=lambda x: -x['cnt'])
+    # Source counts for sidebar
+    src_rows = db.query(
+        "SELECT source_name, COUNT(*) as cnt FROM bsn_articles WHERE source_name IS NOT NULL GROUP BY source_name ORDER BY cnt DESC"
+    )
+    sources = [{'source_name': r['source_name'], 'cnt': r['cnt']} for r in src_rows]
 
-    # Sidebar: categories with counts
-    cat_result = schema.from_('bsn_articles').select('category').not_.is_('category', 'null').execute()
-    cat_counts = {}
-    for row in (cat_result.data or []):
-        c = row['category']
-        cat_counts[c] = cat_counts.get(c, 0) + 1
-    categories = sorted([{'category': k, 'cnt': v} for k, v in cat_counts.items()], key=lambda x: -x['cnt'])
+    # Category counts for sidebar
+    cat_rows = db.query(
+        "SELECT category, COUNT(*) as cnt FROM bsn_articles WHERE category IS NOT NULL GROUP BY category ORDER BY cnt DESC"
+    )
+    categories = [{'category': r['category'], 'cnt': r['cnt']} for r in cat_rows]
 
-    total_articles = schema.from_('bsn_articles').select('id', count='exact').execute().count or 0
+    total_articles_row = db.query("SELECT COUNT(*) as cnt FROM bsn_articles")
+    total_articles = total_articles_row[0]['cnt'] if total_articles_row else 0
     pages = max(1, -(-total // per_page))
 
     return render_template('index.html',
@@ -84,6 +89,6 @@ def index():
 if __name__ == '__main__':
     scheduler = BackgroundScheduler(daemon=True)
     scheduler.add_job(run_scraper, 'interval', hours=6, id='scraper')
-    scheduler.add_job(run_scraper, 'date', id='scraper_boot')  # run once after startup
+    scheduler.add_job(run_scraper, 'date', id='scraper_boot')
     scheduler.start()
     app.run(host='0.0.0.0', port=5000, debug=False)

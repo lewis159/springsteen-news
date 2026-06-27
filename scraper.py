@@ -6,7 +6,7 @@ import requests
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from bs4 import BeautifulSoup
-from db import get_client
+import db
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -70,9 +70,8 @@ def get_thumbnail(entry):
 
 def run_scraper():
     log.info('Scraper run started')
-    sb = get_client()
 
-    sources = sb.from_('bsn_sources').select('id, name, feed_url').eq('active', True).execute().data
+    sources = db.query("SELECT id, name, feed_url FROM bsn_sources WHERE active = TRUE")
 
     new_count = 0
     for source in sources:
@@ -99,18 +98,13 @@ def run_scraper():
             category  = categorise(title + ' ' + summary)
 
             try:
-                result = sb.from_('bsn_articles').upsert({
-                    'title':         title,
-                    'url':           url,
-                    'source_id':     source['id'],
-                    'source_name':   source['name'],
-                    'summary':       summary,
-                    'thumbnail_url': thumbnail,
-                    'published_at':  pub_date,
-                    'category':      category,
-                }, on_conflict='url', ignore_duplicates=True).execute()
-                if result.data:
-                    new_count += 1
+                db.execute(
+                    """INSERT INTO bsn_articles (title, url, source_id, source_name, summary, thumbnail_url, published_at, category)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                       ON CONFLICT (url) DO NOTHING""",
+                    (title, url, source['id'], source['name'], summary, thumbnail, pub_date, category)
+                )
+                new_count += 1
             except Exception as e:
                 log.warning(f"Insert failed for {url}: {e}")
                 continue
